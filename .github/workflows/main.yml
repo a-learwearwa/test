@@ -33,7 +33,7 @@ jobs:
         id: check_restart
         run: |
           sleep $((50 + RANDOM % 120))
-          if (( RANDOM % 2 == 0 )); then
+          if (( RANDOM % 20 == 0 )); then
             echo "Decision: RESTART. Triggering a new workflow run and stopping this one."
             echo "restart=true" >> $GITHUB_OUTPUT
             
