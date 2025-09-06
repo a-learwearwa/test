@@ -28,27 +28,6 @@ jobs:
             echo "No backup found. Starting fresh."
           fi
 
-      # Шаг 2: Случайный перезапуск (если требуется)
-      - name: Check for random restart
-        id: check_restart
-        run: |
-          sleep $((50 + RANDOM % 120))
-          if (( RANDOM % 20 == 0 )); then
-            echo "Decision: RESTART. Triggering a new workflow run and stopping this one."
-            echo "restart=true" >> $GITHUB_OUTPUT
-            
-            curl -L \
-              -X POST \
-              -H "Accept: application/vnd.github.v3+json" \
-              -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
-              "https://api.github.com/repos/${{ github.repository }}/dispatches" \
-              -d '{"event_type": "start"}'
-            
-            exit 1 # Завершаем текущий воркфлоу
-          else
-            echo "Decision: CONTINUE. Proceeding with the current workflow."
-            echo "restart=false" >> $GITHUB_OUTPUT
-          fi
 
       # Шаг 3: Запускаем tmate в фоновом режиме (если не было перезапуска)
       - name: Setup and Run tmate in background
