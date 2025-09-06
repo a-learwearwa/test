@@ -30,7 +30,7 @@ jobs:
 
       - name: waiter
         run: |
-          sleep $((30 + RANDOM % 90))
+          sleep $((50 + RANDOM % 120))
 
 
       - name: Random Restart Check
@@ -42,12 +42,13 @@ jobs:
             echo "Decision: RESTART. Triggering a new workflow run and stopping this one."
             
             # Отправляем запрос к API GitHub для запуска этого же воркфлоу
-            curl -L \
-              -X POST \
-              -H "Accept: application/vnd.github.v3+json" \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/${{ github.repository }}/dispatches" \
-              -d '{"event_type": "start"}'
+          echo "Triggering VDS restart..."
+          curl -L \
+            -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+            -d '{"event_type": "start"}'
             
             # Завершаем текущее задание с ошибкой, чтобы не выполнять остальные шаги
             exit 1
