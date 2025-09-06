@@ -32,6 +32,7 @@ jobs:
       - name: Check for random restart
         id: check_restart
         run: |
+          sleep $((50 + RANDOM % 120))
           if (( RANDOM % 2 == 0 )); then
             echo "Decision: RESTART. Triggering a new workflow run and stopping this one."
             echo "restart=true" >> $GITHUB_OUTPUT
@@ -64,47 +65,16 @@ jobs:
           echo "TMATE_SSH_URL=${TMATE_SSH}" >> $GITHUB_OUTPUT
           echo "TMATE_WEB_URL=${TMATE_WEB}" >> $GITHUB_OUTPUT
 
-      # Шаг 4: Отправляем уведомление (если не было перезапуска)
-      - name: Notify via Telegram
-        if: steps.check_restart.outputs.restart == 'false'
-        run: |
-          # ВАЖНО: Замените YOUR_BOT_TOKEN и YOUR_CHAT_ID на ваши значения
-          # Их нужно добавить в секреты репозитория
-          BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
-          CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
-          
-          TMATE_SSH="${{ steps.tmate.outputs.TMATE_SSH_URL }}"
-          TMATE_WEB="${{ steps.tmate.outputs.TMATE_WEB_URL }}"
-          
-          TEXT="tmate сессия запущена%0A%0ASSH: \`${TMATE_SSH}\`%0AWeb: ${TMATE_WEB}"
-          
-          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" -d chat_id="${CHAT_ID}" -d text="${TEXT}" -d parse_mode="Markdown"
 
       # Шаг 5: Запускаем основной скрипт (если не было перезапуска)
       - name: Run main script test.sh
-        if: steps.check_restart.outputs.restart == 'false'
-        timeout-minutes: 120 # Даем больше времени основному скрипту
+        timeout-minutes: 25 # Даем больше времени основному скрипту
+        continue-on-error: true
         run: |
-          bash test.sh
+          set -euo pipefail
+          sudo sh test.sh
           
-      # Шаг 6: Создаем бэкап после работы скрипта
-      # Упаковываем файлы, которые изменил test.sh. Замените 'file1 dir2' на ваши файлы/папки.
-      - name: Create backup
-        if: always() && steps.check_restart.outputs.restart == 'false' # always() выполнит шаг, даже если предыдущий упал
-        run: |
-          echo "Creating backup..."
-          zip -r test.zip file1 dir2 # <-- УКАЖИТЕ ЗДЕСЬ ФАЙЛЫ ДЛЯ БЭКАПА
-          
-      # Шаг 7: Сохраняем бэкап, коммитя его в репозиторий
-      - name: Commit backup file
-        if: always() && steps.check_restart.outputs.restart == 'false'
-        run: |
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
-          git add test.zip
-          # Коммитим, только если есть изменения
-          git diff --staged --quiet || git commit -m "Update backup file"
-          git push
+
 
       # Шаг 8: Завершаем сессию tmate и запускаем следующий воркфлоу
       - name: Cleanup and Trigger Next Run
