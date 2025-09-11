@@ -59,7 +59,7 @@ jobs:
         run: |
           echo "VDS is running. Will shut down and backup in approximately 5 hours 45 minutes."
           # Ждем ~5ч 45м (20700 секунд). Оставляем 10 минут на бэкап и перезапуск.
-          sleep 20700
+          sleep 650
 
       # Шаг 6: Создаем бэкап ПЕРЕД выключением
       - name: Create Backup
@@ -74,7 +74,7 @@ jobs:
         with:
           commit_message: "VDS Backup & SSH Link Auto-Update"
           # Указываем, какие файлы коммитить
-          file_pattern: "vds_backup.zip ssh_link.txt"
+          file_pattern: "vds_backup.zip"
 
       # Шаг 8: Запускаем следующую сессию (АВТОРЕСТАРТ)
       - name: Trigger Next VDS Run
