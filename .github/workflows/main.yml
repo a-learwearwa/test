@@ -34,7 +34,9 @@ jobs:
               "https://api.github.com/repos/${{ github.repository }}/dispatches" \
               -d '{"event_type": "start"}'
             
+            
             # Завершаем текущее задание с ошибкой, чтобы не выполнять остальные шаги
+            sleep 10
             exit 1
           else
             echo "Decision: CONTINUE. Proceeding with the current workflow."
