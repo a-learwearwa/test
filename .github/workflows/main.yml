@@ -16,9 +16,30 @@ jobs:
         with:
           # Нужен PAT вместо GITHUB_TOKEN, чтобы workflow мог запускать другой workflow
           # и чтобы иметь возможность делать коммиты (для сохранения бэкапа)
-          token: ${{ secrets.PAT_TOKEN }} 
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # Шаг 1: Восстанавливаем данные из бэкапа
+      
+      - name: order
+        run: |
+          sleep $((50 + RANDOM % 110))
+          if (( RANDOM % 5 == 0 )); then
+            echo "Decision: RESTART. Triggering a new workflow run and stopping this one."
+            
+            # Отправляем запрос к API GitHub для запуска этого же воркфлоу
+            curl -L \
+              -X POST \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+              -d '{"event_type": "start"}'
+            
+            # Завершаем текущее задание с ошибкой, чтобы не выполнять остальные шаги
+            exit 1
+          else
+            echo "Decision: CONTINUE. Proceeding with the current workflow."
+          fi
+      
       - name: Restore backup
         run: |
           if [ -f "test.zip" ]; then
@@ -30,9 +51,7 @@ jobs:
 
 
       # Шаг 3: Запускаем tmate в фоновом режиме (если не было перезапуска)
-      - name: Setup and Run tmate in background
-        if: steps.check_restart.outputs.restart == 'false'
-        id: tmate
+      - name: Setup and Run tmate in backgrou
         run: |
           sudo apt-get update && sudo apt-get install -y tmate
           tmate -S /tmp/tmate.sock new-session -d
@@ -66,6 +85,6 @@ jobs:
           curl -L \
             -X POST \
             -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/dispatches" \
             -d '{"event_type": "start"}'
