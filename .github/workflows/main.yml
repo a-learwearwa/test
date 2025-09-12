@@ -1,83 +1,81 @@
-name: Perpetual VDS with tmate
+name: Task
 
 on:
-  # Позволяет запускать вручную из интерфейса GitHub
   workflow_dispatch:
-
-  # Позволяет воркеру запускать самого себя для перезапуска
   repository_dispatch:
-    types: [restart-vds]
+    types: [start]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Таймаут 5 часов 55 минут, чтобы оставить 5 минут на бэкап и перезапуск
-    timeout-minutes: 355
+    timeout-minutes: 150
 
     steps:
-      # Шаг 1: Скачиваем код репозитория
-      # Используем GITHUB_TOKEN, чтобы воркер имел права на запись в репозиторий
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Шаг 2: Восстанавливаем данные из бэкапа, если он существует
-      - name: Restore Data from Backup
+# Шаг 2: Восстанавливаем данные из бэкапа, если он существует
+      - name: Restore
         run: |
-          if [ -f "vds_backup.zip" ]; then
-            echo "Backup file found. Restoring..."
+          if [ -f "test.zip" ]; then
+            echo "file found. Restoring..."
             # Распаковываем архив с заменой существующих файлов
-            unzip -o vds_backup.zip -d ./
+            unzip -o test.zip -d ./
           else
             echo "No backup found. Starting fresh."
           fi
 
-      # Шаг 3: Устанавливаем tmate и запускаем сессию в фоне
-      - name: Setup and Run tmate
-        id: tmate_session # Даем ID шагу, чтобы получить его вывод в следующих шагах
+      - name: Setup and Run tmate (ephemeral)
+        id: tmate_session
         run: |
-          sudo apt-get update && sudo apt-get install -y tmate
-     
-          # Запускаем tmate в фоновом режиме (в "детаче")
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y tmate jq
           tmate -S /tmp/tmate.sock new-session -d
           tmate -S /tmp/tmate.sock wait tmate-ready
-     
-          # Получаем SSH-строку и передаем ее как вывод шага
           TMATE_SSH=$(tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}')
+          TMATE_WEB=$(tmate -S /tmp/tmate.sock display -p '#{tmate_web}')
+          echo "::add-mask::${TMATE_SSH}"
+          echo "::add-mask::${TMATE_WEB}"
           echo "TMATE_SSH_URL=${TMATE_SSH}" >> $GITHUB_OUTPUT
-          echo "========================================================================="
-          echo "SSH connection string: ${TMATE_SSH}"
-          echo "========================================================================="
-     
-      # Шаг 4: Сохраняем SSH-ссылку в текстовый файл для удобства
-      - name: Save SSH Link to File
-        run: echo "${{ steps.tmate_session.outputs.TMATE_SSH_URL }}" > ssh_link.txt
- 
-      # Шаг 5: ОСНОВНОЙ РАБОЧИЙ ЦИКЛ. Здесь сервер "живет"
-      - name: Keep VDS Alive
+          echo "TMATE_WEB_URL=${TMATE_WEB}" >> $GITHUB_OUTPUT
+
+      - name: Save SSH Link to File (local only)
         run: |
-          echo "VDS is running. Will shut down and backup in approximately 5 hours 45 minutes."
-          # Ждем ~5ч 45м (20700 секунд). Оставляем 10 минут на бэкап и перезапуск.
-          sleep 650
-
-      # Шаг 6: Создаем бэкап ПЕРЕД выключением
-      - name: Create Backup
+          set -euo pipefail
+          echo "${{ steps.tmate_session.outputs.TMATE_SSH_URL }}" > ssh_link.txt
+          echo "${{ steps.tmate_session.outputs.TMATE_WEB_URL }}" >> ssh_link.txt
+          chmod 600 ssh_link.txt
+      
+      - name: Notify via Telegram (send SSH link) and short window
+        env:
+          TMATE_SSH: ${{ steps.tmate_session.outputs.TMATE_SSH_URL }}
+          TMATE_WEB: ${{ steps.tmate_session.outputs.TMATE_WEB_URL }}
         run: |
-          echo "Creating data backup..."
-          # Архивируем все содержимое текущей директории, кроме папки .git и самого файла бэкапа
-          zip -r vds_backup.zip . -x ".git/*" "vds_backup.zip" "ssh_link.txt"
+          set -euo pipefail
+          if [ -z "${TMATE_SSH}" ] && [ -z "${TMATE_WEB}" ]; then
+            echo "No tmate link available, skipping Telegram notify."
+          else
+            TEXT="TMATE SSH: ${TMATE_SSH}%0AWeb: ${TMATE_WEB}%0A(Ссылка замаскирована в логах.)"
+          fi
+          echo "Ephemeral tmate window: 10 minutes"
+          sleep 500
+          # После окна убиваем только tmate-сервер (не фоновые процессы)
+          tmate -S /tmp/tmate.sock kill-server || true
+          
 
-      # Шаг 7: Сохраняем бэкап и SSH-ссылку в репозиторий
-      - name: Commit Backup and SSH Link
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "VDS Backup & SSH Link Auto-Update"
-          # Указываем, какие файлы коммитить
-          file_pattern: "vds_backup.zip"
+      - name: Start test.sh in background (supervised)
+        continue-on-error: true
+        timeout-minutes: 100
+        run: |
+          set -euo pipefail
+          sudo sh test.sh
 
-      # Шаг 8: Запускаем следующую сессию (АВТОРЕСТАРТ)
-      - name: Trigger Next VDS Run
+
+
+      - name: Trigger Next Run
         run: |
           echo "Triggering VDS restart..."
           # Отправляем запрос к API GitHub, чтобы запустить этот же воркфлоу снова
@@ -86,4 +84,4 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/dispatches" \
-            -d '{"event_type": "restart-vds"}'
+            -d '{"event_type": "start"}'
