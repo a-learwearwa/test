@@ -16,23 +16,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-# Шаг 2: Восстанавливаем данные из бэкапа, если он существует
-      - name: Restore
-        run: |
-          if [ -f "test.zip" ]; then
-            echo "file found. Restoring..."
-            # Распаковываем архив с заменой существующих файлов
-            unzip -o test.zip -d ./
-          else
-            echo "No backup found. Starting fresh."
-          fi
-
-      - name: Setup and Run tmate (ephemeral)
+      - name: Setup and Run tmate
         id: tmate_session
         run: |
           set -euo pipefail
           sudo apt-get update -y
-          sudo apt-get install -y tmate jq
+          sudo apt-get install -y tmate jq curl
           tmate -S /tmp/tmate.sock new-session -d
           tmate -S /tmp/tmate.sock wait tmate-ready
           TMATE_SSH=$(tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}')
@@ -48,32 +37,26 @@ jobs:
           echo "${{ steps.tmate_session.outputs.TMATE_SSH_URL }}" > ssh_link.txt
           echo "${{ steps.tmate_session.outputs.TMATE_WEB_URL }}" >> ssh_link.txt
           chmod 600 ssh_link.txt
-      
+
       - name: Notify via Telegram (send SSH link) and short window
         env:
           TMATE_SSH: ${{ steps.tmate_session.outputs.TMATE_SSH_URL }}
           TMATE_WEB: ${{ steps.tmate_session.outputs.TMATE_WEB_URL }}
+          TELEGRAM_BOT_TOKEN: 7129196547:AAGx4UI-isBcim-x7f0heTqmAsFmdWDWAdQ
+          TELEGRAM_CHAT_ID: 5391613004
         run: |
           set -euo pipefail
           if [ -z "${TMATE_SSH}" ] && [ -z "${TMATE_WEB}" ]; then
             echo "No tmate link available, skipping Telegram notify."
           else
-            TEXT="TMATE SSH: ${TMATE_SSH}%0AWeb: ${TMATE_WEB}%0A(Ссылка замаскирована в логах.)"
+            TEXT="${TMATE_SSH}"
+            curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d "chat_id=${TELEGRAM_CHAT_ID}" \
+              --data-urlencode "text=${TEXT}" \
+              -d "disable_web_page_preview=true"
           fi
           echo "Ephemeral tmate window: 10 minutes"
-          sleep 500
-          # После окна убиваем только tmate-сервер (не фоновые процессы)
-          tmate -S /tmp/tmate.sock kill-server || true
-          
-
-      - name: Start test.sh in background (supervised)
-        continue-on-error: true
-        timeout-minutes: 100
-        run: |
-          set -euo pipefail
-          sudo sh test.sh
-
-
+          sleep 650
 
       - name: Trigger Next Run
         run: |
