@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 30
 
     steps:
       - name: Checkout Code
@@ -57,15 +57,4 @@ jobs:
               -d "disable_web_page_preview=true"
           fi
           echo "Ephemeral tmate window: 10 minutes"
-          sleep 650
-
-      - name: Trigger Next Run
-        run: |
-          echo "Triggering VDS restart..."
-          # Отправляем запрос к API GitHub, чтобы запустить этот же воркфлоу снова
-          curl -L \
-            -X POST \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
-            -d '{"event_type": "start"}'
+          sleep 850
