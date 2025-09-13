@@ -22,10 +22,8 @@ jobs:
           set -euo pipefail
           sudo apt-get update -y
           sudo apt-get install -y tmate jq curl
-          tmate -S /tmp/tmate.sock new-session -d
+          tmate -S /tmp/tmate.sock -F &
           tmate -S /tmp/tmate.sock wait tmate-ready
-          tmate -S /tmp/tmate.sock set-option -g status off
-          tmate -S /tmp/tmate.sock set-option -g tmate-display-messages off
           TMATE_SSH=$(tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}')
           TMATE_WEB=$(tmate -S /tmp/tmate.sock display -p '#{tmate_web}')
           echo "::add-mask::${TMATE_SSH}"
